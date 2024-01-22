@@ -1,0 +1,328 @@
+Wszystkie zadania z adventure works. Jako, że microsoft sql server mi nie działał całe zadania są przekopiowane do notatnika i mam nadzieję, że nigdzie się nie pomyliłem
+IF OBJECT_ID('dbo.PrintFibonacciSequence', 'P') IS NOT NULL
+    DROP PROCEDURE dbo.PrintFibonacciSequence;
+
+IF OBJECT_ID('dbo.Fibonacci', 'FN') IS NOT NULL
+    DROP FUNCTION dbo.Fibonacci;
+
+CREATE FUNCTION dbo.Fibonacci(@n INT) RETURNS INT
+AS
+BEGIN
+    DECLARE @result INT;
+
+    IF @n = 0
+        SET @result = 0;
+    ELSE IF @n = 1
+        SET @result = 1;
+    ELSE
+        SET @result = dbo.Fibonacci(@n - 1) + dbo.Fibonacci(@n - 2);
+
+    RETURN @result;
+END;
+
+CREATE PROCEDURE dbo.PrintFibonacciSequence @n INT
+AS
+BEGIN
+    DECLARE @FibonacciSequence TABLE (FibValue INT);
+
+    INSERT INTO @FibonacciSequence
+    SELECT dbo.Fibonacci(n)
+    FROM (SELECT TOP (@n) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) - 1 AS n FROM sys.objects) AS Numbers;
+
+    SELECT FibValue
+    FROM @FibonacciSequence;
+END;
+
+EXEC dbo.PrintFibonacciSequence @n = 10;
+
+
+
+IF OBJECT_ID('ChangeNames', 'TR') IS NOT NULL
+    DROP TRIGGER ChangeNames;
+
+CREATE TRIGGER ChangeNames
+ON Person.Person
+AFTER INSERT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+   UPDATE p
+    SET p.LastName = UPPER(i.LastName)
+    FROM Person.Person p
+    INNER JOIN inserted i ON p.PersonType = i.PersonType;
+END;
+
+CREATE TRIGGER taxRateMonitoring
+ON Sales.SalesTaxRate
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF UPDATE(TaxRate)
+    BEGIN
+        DECLARE @OldTaxRate DECIMAL(8, 4);
+        DECLARE @NewTaxRate DECIMAL(8, 4);
+
+        SELECT @OldTaxRate = TaxRate FROM deleted;
+        SELECT @NewTaxRate = TaxRate FROM inserted;
+
+        IF ABS(@NewTaxRate - @OldTaxRate) > 0.30
+        BEGIN
+        RAISERROR ('Not allowed to change TaxRate more than 30%.',16,1)
+        ROLLBACK
+        END
+    END
+END;
+
+CREATE TABLE TempEmployeeInfo
+(
+    EmployeeID INT,
+    FirstName NVARCHAR(50),
+    LastName NVARCHAR(50),
+    JobTitle NVARCHAR(100),
+    Rate MONEY,
+    RateChangeDate DATE
+);
+WITH EmployeeRatesCTE AS
+(
+    SELECT
+        e.BusinessEntityID AS EmployeeID,
+        pp.FirstName,
+        pp.LastName,
+        e.JobTitle,
+        p.Rate,
+        p.RateChangeDate
+    FROM
+    HumanResources.Employee e
+    INNER JOIN
+        HumanResources.EmployeePayHistory p ON e.BusinessEntityID = p.BusinessEntityID
+    INNER JOIN
+        Person.Person pp ON e.BusinessEntityID = pp.BusinessEntityID
+)
+
+INSERT INTO TempEmployeeInfo (EmployeeID, FirstName, LastName, JobTitle, Rate, RateChangeDate)
+SELECT
+    EmployeeID,
+    FirstName,
+    LastName,
+    JobTitle,
+    Rate,
+    RateChangeDate
+FROM
+    EmployeeRatesCTE;
+SELECT *
+FROM TempEmployeeInfo;
+
+WITH SalesInfoCTE AS
+(
+    SELECT
+        c.CustomerID,
+        CONCAT(c.CompanyName, '( ', c.FirstName, ' ', c.LastName, ')') AS CompanyContact,
+        soh.TotalDue
+    FROM
+        SalesLT.Customer c
+    INNER JOIN
+        SalesLT.SalesOrderHeader soh ON c.CustomerID = soh.CustomerID
+)
+
+SELECT
+    CompanyContact,
+    SUM(TotalDue) AS Revenue
+FROM
+    SalesInfoCTE
+GROUP BY
+    CompanyContact
+ORDER BY CompanyContact ASC;
+
+WITH SalesByCategoryCTE AS
+(
+    SELECT
+        pc.Name AS CategoryName,
+        p.Name AS ProductName,
+        sod.OrderQty * sod.UnitPrice AS SalesAmount
+    FROM
+        SalesLT.SalesOrderDetail sod
+    INNER JOIN
+        SalesLT.Product p ON sod.ProductID = p.ProductID
+    INNER JOIN
+        SalesLT.ProductCategory pc ON p.ProductCategoryID = pc.ProductCategoryID
+)
+
+SELECT
+    CategoryName,
+    SUM(SalesAmount) AS TotalSales
+FROM
+    SalesByCategoryCTE
+GROUP BY
+    CategoryName
+ORDER BY
+    TotalSales DESC;
+
+BEGIN TRANSACTION;
+UPDATE Production.Product
+SET ListPrice = ListPrice*1.1
+WHERE ProductID = 680
+COMMIT TRANSACTION;
+
+BEGIN TRANSACTION;
+INSERT INTO Production.Product(
+      [Name]
+      ,[ProductNumber]
+      ,[MakeFlag]
+      ,[FinishedGoodsFlag]
+      ,[Color]
+      ,[SafetyStockLevel]
+      ,[ReorderPoint]
+      ,[StandardCost]
+      ,[ListPrice]
+      ,[Size]
+      ,[SizeUnitMeasureCode]
+      ,[WeightUnitMeasureCode]
+      ,[Weight]
+      ,[DaysToManufacture]
+      ,[ProductLine]
+      ,[Class]
+      ,[Style]
+      ,[ProductSubcategoryID]
+      ,[ProductModelID]
+      ,[SellStartDate]
+      ,[SellEndDate]
+      ,[DiscontinuedDate]
+      ,[rowguid]
+      ,[ModifiedDate])
+VALUES (
+        'Nowy Produkt', 
+        'NP-001', 
+        1, 
+        1, 
+        'Czerwony', 
+        500, 
+        250, 
+        100.00, 
+        150.00, 
+        'M', 
+        'CM', 
+        'KG', 
+        1.00, 
+        0, 
+        'R', 
+        'H', 
+        'U', 
+        (SELECT TOP 1 ProductSubcategoryID FROM Production.ProductSubcategory), 
+        (SELECT TOP 1 ProductModelID FROM Production.ProductModel), 
+        GETDATE(), 
+        NULL, 
+        NULL, 
+        NEWID(), 
+        GETDATE()
+);
+
+COMMIT TRANSACTION;
+
+BEGIN TRANSACTION;
+DELETE FROM Production.Product
+WHERE ProductID = 680;
+ROLLBACK TRANSACTION;
+
+BEGIN TRANSACTION;
+UPDATE Production.Product
+SET StandardCost = 1.1*StandardCost
+
+IF(SELECT SUM(StandardCost) FROM Production.Product)>5000
+ROLLBACK TRANSACTION
+ELSE
+COMMIT TRANSACTION
+
+BEGIN TRANSACTION
+IF EXISTS(SELECT * FROM sys.indexes WHERE name= 'AK_Product_ProductNumber' AND object_id = OBJECT_ID('Production.Product'))
+BEGIN 
+DROP INDEX AK_Product_ProductNumber ON Production.Product;
+ END
+ IF EXISTS(SELECT *FROM Production.Product WHERE ProductNumber = 'Nowy Numer Produktu')
+ BEGIN 
+ ROLLBACK TRANSACTION
+ END
+ ELSE
+ BEGIN
+ INSERT INTO Production.Product(
+      [Name]
+      ,[ProductNumber]
+      ,[MakeFlag]
+      ,[FinishedGoodsFlag]
+      ,[Color]
+      ,[SafetyStockLevel]
+      ,[ReorderPoint]
+      ,[StandardCost]
+      ,[ListPrice]
+      ,[Size]
+      ,[SizeUnitMeasureCode]
+      ,[WeightUnitMeasureCode]
+      ,[Weight]
+      ,[DaysToManufacture]
+      ,[ProductLine]
+      ,[Class]
+      ,[Style]
+      ,[ProductSubcategoryID]
+      ,[ProductModelID]
+      ,[SellStartDate]
+      ,[SellEndDate]
+      ,[DiscontinuedDate]
+      ,[rowguid]
+      ,[ModifiedDate])
+VALUES (
+        'NowyNumerProduktu', 
+        'NP-001', 
+        1, 
+        1, 
+        'Czerwony', 
+        500, 
+        250, 
+        100.00, 
+        150.00, 
+        'M', 
+        'CM', 
+        'KG', 
+        1.00, 
+        0, 
+        'R', 
+        'H', 
+        'U', 
+        (SELECT TOP 1 ProductSubcategoryID FROM Production.ProductSubcategory), 
+        (SELECT TOP 1 ProductModelID FROM Production.ProductModel), 
+        GETDATE(), 
+        NULL, 
+        NULL, 
+        NEWID(), 
+        GETDATE()
+);
+
+COMMIT TRANSACTION;
+END
+
+BEGIN TRANSACTION
+IF EXISTS(SELECT*FROM Sales.SalesOrderDetail WHERE OrderQty = 0)
+BEGIN
+ROLLBACK TRANSACTION
+END 
+ELSE
+BEGIN 
+UPDATE Sales.SalesOrderDetail
+SET OrderQty=20
+COMMIT TRANSACTION 
+END
+
+BEGIN TRANSACTION;
+DECLARE @AverageCost DECIMAL(18, 2);
+SELECT @AverageCost = AVG(StandardCost) FROM Production.Product;
+DELETE FROM Production.Product
+WHERE StandardCost > @AverageCost;
+IF @@ROWCOUNT > 10
+BEGIN
+ ROLLBACK TRANSACTION;
+END
+ELSE
+BEGIN
+    COMMIT TRANSACTION;
+END

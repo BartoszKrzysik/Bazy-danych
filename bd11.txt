@@ -1,0 +1,5 @@
+Zad.1
+Gdy tabela ma klucz główny, zapytanie może szybko odnaleźć konkretny rekord, co jest efektywne i minimalizuje koszty operacji. Bez klucza głównego, wyszukiwanie może być kosztowne, sięgając nawet 100%, ze względu na przeszukiwanie całej tabeli. Zmiana "AND" na "OR" może zwiększyć liczbę przeszukiwanych rekordów, co może prowadzić do wyższych kosztów operacji.
+
+Zad.2
+Dodanie indeksu (IX_Product_Name) poprawia wydajność zapytania, przyspieszając proces wyszukiwania rekordów po kolumnie "Name". Indeksy są istotne dla optymalizacji operacji wyszukiwania w bazie danych. W przypadku zapytania, gdzie wyszukiwane jest "Name = 'Bearing Ball'", indeks ten umożliwia szybkie odnalezienie pasującego rekordu, co skutkuje efektywniejszym przeszukiwaniem danych.
